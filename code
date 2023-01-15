@@ -1,0 +1,330 @@
+# Импорты
+import os
+import sys
+import pygame
+import random
+
+pygame.init()
+
+# Гравитация партиклов
+GRAVITY = 2
+
+# Кадры в секунду
+FPS = 15
+
+# Переменная отвечающая за размер персонажа и объектов (масштаб)
+object_size = 20
+
+# Переменная в которую записывается счет
+score = 0
+
+# Разрешение игрового окна
+width = 800
+height = 800
+
+# Направление персонажа
+up = False
+down = False
+left = False
+right = False
+
+running = True
+game_over = False
+
+# Размеры окна
+x1 = width / 2
+y1 = height / 2
+
+x_move = 0
+y_move = 0
+
+snake_lst = []
+snake_num = 1
+
+x_apple = round(random.randrange(0, width - object_size) / object_size) * object_size
+y_apple = round(random.randrange(0, height - object_size) / object_size) * object_size
+
+# Ограничение кадров для начального и конечного экрана, для оптимизации
+FPS1 = 10
+
+# Запись счета
+score_write = open("score.txt", 'a')
+res_write = open("res.txt", "w")
+
+# Проверка на пустоту файла
+if os.stat("res.txt").st_size == 0:
+    res_write.write("                                                   Game over!\n")
+    res_write.write("Предыдущие результаты: \n")
+
+# Создание холста
+screen = pygame.display.set_mode((width, height))
+pygame.display.set_caption('Mario')
+
+# Создание экземпляра класса
+clock = pygame.time.Clock()
+
+# Группа спрайтов, в которой хранятся партиклы
+all_sprites = pygame.sprite.Group()
+
+
+# Загрузка изображения
+def load_image(name, colorkey=None):
+    fullname = os.path.join('data', name)
+
+    if not os.path.isfile(fullname):
+        print(f"Файл с изображением '{fullname}' не найден")
+        sys.exit()
+    image = pygame.image.load(fullname)
+
+    if colorkey is not None:
+        image = image.convert()
+        if colorkey == -1:
+            colorkey = image.get_at((0, 0))
+        image.set_colorkey(colorkey)
+    else:
+        image = image.convert_alpha()
+    return image
+
+
+# Трансформация изображения по масштабу
+mar = pygame.transform.scale(load_image('mario.png'), (object_size, object_size))
+apple = pygame.transform.scale(load_image('apple.png'), (object_size, object_size))
+
+
+class Particle(pygame.sprite.Sprite):
+    # сгенерируем частицы разного размера
+    fire = [load_image("star.png")]
+
+    for scale in (5, 10, 20):
+        fire.append(pygame.transform.scale(fire[0], (scale, scale)))
+
+    def __init__(self, pos, dx, dy):
+        super().__init__(all_sprites)
+
+        self.image = random.choice(self.fire)
+        self.rect = self.image.get_rect()
+
+        # у каждой частицы своя скорость — это вектор
+        self.velocity = [dx, dy]
+
+        # и свои координаты
+        self.rect.x, self.rect.y = pos
+
+        # гравитация будет одинаковой (значение константы)
+        self.gravity = GRAVITY
+
+    def update(self):
+        # применяем гравитационный эффект:
+        # движение с ускорением под действием гравитации
+        self.velocity[1] -= self.gravity
+        # перемещаем частицу
+        self.rect.x += self.velocity[0]
+        self.rect.y += self.velocity[1]
+        # убиваем, если частица ушла за экран
+        if not self.rect.colliderect((0, 0, width, height)):
+            self.kill()
+
+
+def create_particles(position):
+    # количество создаваемых частиц
+    particle_count = 15
+
+    # возможные скорости
+    numbers = range(-5, 6)
+
+    for _ in range(particle_count):
+        Particle(position, random.choice(numbers), random.choice(numbers))
+
+
+def terminate():
+    pygame.quit()
+    sys.exit()
+
+
+def start_screen():
+    intro_text = ["                                                             Змейка",
+                  "Правила простые, чем больше яблок съедаешь - тем длиннее становишься"]
+
+    fon = pygame.transform.scale(load_image('fon.jpg'), (width, height))
+    screen.blit(fon, (0, 0))
+    font = pygame.font.Font(None, 30)
+    text_coord = 350
+    for line in intro_text:
+        string_rendered = font.render(line, True, pygame.Color('black'))
+        intro_rect = string_rendered.get_rect()
+        text_coord += 10
+        intro_rect.top = text_coord
+        intro_rect.x = 10
+        text_coord += intro_rect.height
+        screen.blit(string_rendered, intro_rect)
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            elif event.type == pygame.KEYDOWN or \
+                    event.type == pygame.MOUSEBUTTONDOWN:
+                return  # начинаем игру
+        pygame.display.flip()
+        clock.tick(FPS1)
+
+
+start_screen()
+
+
+def end_screen():
+    score_write.write(f'{str(score)}\n')
+    score_write.close()
+    score_read = open("score.txt", "r").read()
+    font = pygame.font.Font(None, 30)
+    y_text = 50
+    x_move = 10
+    for j in score_read:
+        res_write.write(f"{j}")
+    res_write.close()
+    res_read = open("res.txt", "r").readlines()
+    for line in res_read:
+        line.replace("\n", "")
+        string_rendered = font.render(line, True, (91, 10, 112))
+        intro_rect = string_rendered.get_rect()
+        if y_text + 10 < height:
+            y_text += 10
+            intro_rect.top = y_text
+            intro_rect.x = x_move
+            y_text += intro_rect.height
+            screen.blit(string_rendered, intro_rect)
+        else:
+            y_text = 110
+            x_move += 100
+            intro_rect.x += 110
+            y_text += 10
+            intro_rect.top = y_text
+            y_text += intro_rect.height
+            screen.blit(string_rendered, intro_rect)
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        pygame.display.flip()
+        clock.tick(FPS1)
+
+
+while running:
+    if game_over:
+        screen.fill((221, 255, 251))
+        value = pygame.font.SysFont("Arial", 20).render("Текущий счет: " + str(snake_num - 1), True, (91, 10, 112))
+        screen.blit(value, (315, 0))
+        pygame.display.update()
+        clock.tick(10)
+        end_screen()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                if up is False:
+                    y_move = -object_size
+                    x_move = 0
+                    up = False
+                    down = True
+                    left = False
+                    right = False
+
+            elif event.key == pygame.K_DOWN:
+                if down is False:
+                    y_move = object_size
+                    x_move = 0
+                    down = False
+                    up = True
+                    left = False
+                    right = False
+
+            elif event.key == pygame.K_LEFT:
+                if left is False:
+                    x_move = -object_size
+                    y_move = 0
+                    left = False
+                    right = True
+                    up = False
+                    down = False
+
+            elif event.key == pygame.K_RIGHT:
+                if right is False:
+                    x_move = object_size
+                    y_move = 0
+                    right = False
+                    left = True
+                    up = False
+                    down = False
+
+    if x1 >= width or x1 < 0 or y1 >= height or y1 < 0:
+        game_over = True
+
+    x1 += x_move
+    y1 += y_move
+
+    screen.fill((221, 255, 251))
+
+    all_sprites.update()
+    all_sprites.draw(screen)
+
+    pygame.draw.rect(screen, (221, 255, 251), (x_apple, y_apple, object_size, object_size))
+    screen.blit(apple, (x_apple, y_apple))
+
+    snake_pos = []
+    snake_pos.append(x1)
+    snake_pos.append(y1)
+    snake_lst.append(snake_pos)
+
+    if len(snake_lst) > snake_num:
+        del snake_lst[0]
+
+    for x in snake_lst[:-1]:
+        if x == snake_pos:
+            game_over = True
+
+    pygame.draw.rect(screen, (221, 255, 251), (snake_lst[0][0], snake_lst[0][1], object_size, object_size))
+    screen.blit(mar, (snake_lst[0][0], snake_lst[0][1]))
+
+    for i in snake_lst:
+        pygame.draw.rect(screen, (221, 255, 251), (i[0], i[1], object_size, object_size))
+        screen.blit(mar, (i[0], i[1]))
+
+    value = pygame.font.SysFont("Arial", 20).render("Текущий счет: " + str(score), True, (91, 10, 112))
+    screen.blit(value, (315, 0))
+
+    apple_eaten1 = False
+    apple_eaten2 = False
+
+    pygame.display.update()
+
+    for i in range(int(x1) - object_size, int(x1)):
+        if i in range(x_apple - object_size, x_apple):
+            apple_eaten1 = True
+
+    for i in range(int(y1) - object_size, int(y1)):
+        if i in range(y_apple - object_size, y_apple):
+            apple_eaten2 = True
+
+    if apple_eaten1 and apple_eaten2:
+        if y_apple <= height // 2:
+            GRAVITY = -2
+
+        elif y_apple > height // 2:
+            GRAVITY = 2
+
+        create_particles((x_apple, y_apple))
+
+        x_apple = round(random.randrange(0, width - object_size) / object_size) * object_size
+        y_apple = round(random.randrange(0, height - object_size) / object_size) * object_size
+
+        snake_num += 1
+        score += 1
+
+    clock.tick(FPS)
+
+pygame.quit()
